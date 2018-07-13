@@ -1,0 +1,114 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using Plugin.BLE;
+using Plugin.BLE.Abstractions.Contracts;
+using MvvmCross.Binding;
+using Plugin.BLE.Abstractions.Exceptions;
+using Plugin.BLE.Abstractions.Extensions;
+using Plugin.BLE.Abstractions.EventArgs;
+using Plugin.BLE.Abstractions.Utils;
+using System.Threading.Tasks;
+using MvvmCross;
+using Xamarin.Forms;
+using System.Diagnostics;
+using System.Text;
+
+namespace BlueSIS
+{
+    public partial class NuevoItem
+    {
+        IAdapter adapter;
+        IBluetoothLE bluetoothLE;
+        ObservableCollection<IDevice> list;
+        IDevice device;
+
+        public NuevoItem()
+        {
+            
+            InitializeComponent();
+
+            bluetoothLE = CrossBluetoothLE.Current;
+            adapter = CrossBluetoothLE.Current.Adapter;
+            list = new ObservableCollection<IDevice>();
+
+            DevicesList.ItemsSource = list;
+        }
+        private async void searchDevice(object sender, EventArgs e)
+        {
+            if (bluetoothLE.State == BluetoothState.Off)
+            {
+                await DisplayAlert("Atencion", "Bluetooth Desabilitado", "ok");
+            }
+            else
+            {
+                list.Clear();
+
+                adapter.ScanTimeout = 10000;
+                adapter.ScanMode = ScanMode.Balanced;
+                adapter.DeviceDiscovered += (obj, a) =>
+                {
+                    if (!list.Contains(a.Device))
+                        list.Add(a.Device);
+                };
+                await adapter.StartScanningForDevicesAsync();
+            }
+
+        }
+        public async void DevicesList_OnItemSelected(object sender, SelectedItemChangedEventArgs e)
+        {
+            device = DevicesList.SelectedItem as IDevice;
+
+            var result = await DisplayAlert("Aviso", "Desea conectar con BlueSIS?", "Conectar", "Cancelar");
+
+            if (result)
+                return;
+            await adapter.StopScanningForDevicesAsync();
+
+            try
+            {
+                await adapter.ConnectToDeviceAsync(device);
+                await DisplayAlert("Conectado", "Status:" + device.State, "Ok");
+            }
+            catch (DeviceConnectionException ex)
+            {
+                await DisplayAlert("Error", ex.Message, "Ok");
+
+            }
+
+
+                /*var characteristic = await GetCharacteristicById(parameters, Guid.Parse("00002A87-0000-1000-8000-00805f9b34fb"));
+                byte[] array = Encoding.UTF8.GetBytes(UserDataMock.Email);
+                characteristic.WriteAsync(array);
+            });*/
+
+            }
+
+            public void btn_clicked(Plugin.BLE.Abstractions.Contracts.IDevice device)
+            {
+                Xamarin.Forms.Device.BeginInvokeOnMainThread(async () =>
+                {
+                    adapter = CrossBluetoothLE.Current.Adapter;
+                    try
+                    {
+                        await adapter.ConnectToDeviceAsync(device);
+                    }
+                    catch (DeviceConnectionException)
+                    {
+                        Debug.WriteLine("Connection failed");
+                    }
+
+                    var service = await device.GetServiceAsync(Guid.Parse("00002220-0000-1000-8000-00805f9b34fb"));
+                    var characteristic = await service.GetCharacteristicAsync(Guid.Parse("00002222-0000-1000-8000-00805f9b34fb"));
+
+                    string input = "4";
+                    byte[] array = Encoding.UTF8.GetBytes(input);
+                    var send = await characteristic.WriteAsync(array);
+
+                });
+
+        }
+
+
+        }
+    }
